@@ -5,9 +5,7 @@ import android.graphics.Color;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Message;
 import android.util.Log;
-import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewTreeObserver;
@@ -28,8 +26,10 @@ public class TransparentDetector {
     private HashMap<String, View> viewHashMap = new HashMap<>();
     private HashMap<String, MenuButtonBound> menuButtonBoundHashMap = new HashMap<>();
 
-    public TransparentDetector() {
-
+    public enum ClickType {
+        DOWN,
+        UP,
+        LONG_PRESS
     }
 
     public void addView(View view) {
@@ -40,72 +40,17 @@ public class TransparentDetector {
         for (View view : views) {
             view.setDrawingCacheEnabled(true);
             view.buildDrawingCache(true);
-            setViewByTag(view);
-            getAllViewHeight(view);
+            collectViewByTagAndSaveToHash(view);
+            collectViewBoundAreaAndSaveToHash(view);
             setOnTouchListener(view);
-
         }
     }
 
-    public void setViewByTag(View view) {
+    public void collectViewByTagAndSaveToHash(View view) {
         viewHashMap.put(view.getTag().toString(), view);
     }
 
-    private void getPixelColor(MotionEvent motionEvent, View view, String buttonIdentifier, boolean isLongPress) {
-        bitmap = view.getDrawingCache();
-
-        int pixel = bitmap.getPixel((int) motionEvent.getX(), (int) motionEvent.getY());
-        int red = Color.red(pixel);
-        int blue = Color.blue(pixel);
-        int green = Color.green(pixel);
-
-        TapedPoint tapedPoint = new TapedPoint((int) motionEvent.getX(), (int) motionEvent.getY());
-
-        Log.d(TAG, "Car Point: " + tapedPoint.getX1() + "," + tapedPoint.getY1());
-
-        int x = (int) (view.getX() + tapedPoint.getX1());
-        int y = (int) (view.getY() + tapedPoint.getY1());
-
-        TapedPoint tapedPointActual = new TapedPoint(x, y);
-
-        Log.d(TAG, "Car Point Actual: " + tapedPointActual.getX1() + "," + tapedPointActual.getY1());
-
-        Log.d(TAG, "Red: " + red + " Blue: " + blue + " Green: " + green);
-
-
-        if (red == 0 && blue == 0 && green == 0) {
-            boolean notFound = true;
-            for (String key : menuButtonBoundHashMap.keySet()) {
-                if (menuButtonBoundHashMap.get(key).isInButtonArea(tapedPointActual)
-                        && !key.equalsIgnoreCase(buttonIdentifier)) {
-                    Log.d(TAG, "getPixelColor: " + key);
-                    notFound = false;
-                    chooseListener(getView(key), isLongPress);
-                    break;
-                }
-            }
-
-            if (notFound) {
-                chooseListener(view, isLongPress);
-            }
-
-
-        } else {
-            Log.d(TAG, "getPixelColor: " + buttonIdentifier);
-            chooseListener(view, isLongPress);
-        }
-
-    }
-
-    private void chooseListener(View view, boolean isLong) {
-        if (isLong) {
-            onDetectListener.onLongClick(view);
-        } else {
-            onDetectListener.onClickUp(view);
-        }
-    }
-
-    private void getAllViewHeight(final View view) {
+    private void collectViewBoundAreaAndSaveToHash(final View view) {
         ViewTreeObserver vto = view.getViewTreeObserver();
         vto.addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
@@ -123,14 +68,84 @@ public class TransparentDetector {
 
                 MenuButtonBound menuButtonBound = new MenuButtonBound(x, y, x + width, y + height);
                 menuButtonBoundHashMap.put(view.getTag().toString(), menuButtonBound);
-                Log.d(TAG, "onGlobalLayout: " + view.getTag().toString() + ": " + width + ":" + height + "|" + x + "," + y);
+                //Log.d(TAG, "onGlobalLayout: " + view.getTag().toString() + ": " + width + ":" + height + "|" + x + "," + y);
 
             }/**/
         });
 
     }
 
-    boolean isLongTouchAlive = false;
+    private void getPixelColorFindViewAndMakeListener(TapedPoint tapedPoint, View view, ClickType clickType) {
+        try {
+            bitmap = view.getDrawingCache();
+            int pixel = bitmap.getPixel(tapedPoint.getX1(), tapedPoint.getY1());
+            int red = Color.red(pixel);
+            int blue = Color.blue(pixel);
+            int green = Color.green(pixel);
+            Log.d(TAG, "Red: " + red + " Blue: " + blue + " Green: " + green);
+            //Log.d(TAG, "Car Point: " + tapedPoint.getX1() + "," + tapedPoint.getY1());
+
+            int x = (int) (view.getX() + tapedPoint.getX1());
+            int y = (int) (view.getY() + tapedPoint.getY1());
+
+            TapedPoint tapedPointActual = new TapedPoint(x, y);
+            //Log.d(TAG, "Car Point Actual: " + tapedPointActual.getX1() + "," + tapedPointActual.getY1());
+            detectActualViewAndSelectListener(view, clickType, red, blue, green, tapedPoint, tapedPointActual);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private void detectActualViewAndSelectListener(View view, ClickType clickType, int red, int blue, int green, TapedPoint tapedPoint, TapedPoint tapedPointActual) {
+        if (red == 0 && blue == 0 && green == 0) {
+
+            for (String key : menuButtonBoundHashMap.keySet()) {
+                if (menuButtonBoundHashMap.get(key).isInButtonArea(tapedPointActual) && !key.equalsIgnoreCase(view.getTag().toString())) {
+                    int x = ((tapedPointActual.getX1() - (int) getView(key).getX()) + 1);
+                    int y = ((tapedPointActual.getY1() - (int) getView(key).getY()) + 1);
+
+                    bitmap = getView(key).getDrawingCache();
+                    int pixel = bitmap.getPixel(x, y);
+                    int red1 = Color.red(pixel);
+                    int blue1 = Color.blue(pixel);
+                    int green1 = Color.green(pixel);
+
+                    Log.d(TAG, "down image: " + x + "," + y);
+                    Log.d(TAG, ">>Red: " + red1 + " Blue: " + blue1 + " Green: " + green1);
+
+                    if (red1 != 0 || blue1 != 0 || green1 != 0) {
+                        chooseListener(getView(key), clickType);
+                    }
+
+                    break;
+                }
+            }
+
+        } else {
+            chooseListener(view, clickType);
+        }
+    }
+
+    private void chooseListener(View view, ClickType clickType) {
+        if (clickType == ClickType.LONG_PRESS) {
+            onDetectListener.onLongClick(view);
+        } else if (clickType == ClickType.UP) {
+            onDetectListener.onClickUp(view);
+        } else if (clickType == ClickType.DOWN) {
+            onDetectListener.onClickDown(view);
+        }
+    }
+
+    private View getView(String tag) {
+        return viewHashMap.get(tag);
+    }
+
+    private boolean isLongTouchAlive = false;
+    private TapedPoint tapedPoint;
+    private long tapStartTime = 0L;
+    final Handler handler = new Handler(Looper.getMainLooper());
 
     public void setOnTouchListener(View view) {
         view.setOnTouchListener(new View.OnTouchListener() {
@@ -141,31 +156,43 @@ public class TransparentDetector {
                     @Override
                     public void run() {
                         if (isLongTouchAlive) {
-
-                            LongPressData longPressData = new LongPressData();
-                            longPressData.motionEvent = motionEvent;
-                            longPressData.view = view;
-                            longPressData.tag = view.getTag().toString();
-                            longPressData.isLongPress = true;
-
-                            Message message = new Message();
-                            message.what = 1;
-                            message.obj = longPressData;
-                            responseHandler.sendMessage(message);
-
-                            //getPixelColor(motionEvent, view, view.getTag().toString(), true);
+                            handler.removeCallbacks(this);
+                            fireLongPress();
                         }
+                    }
+
+                    private void fireLongPress() {
+                        final Handler inner = new Handler(Looper.getMainLooper());
+                        inner.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                inner.removeCallbacks(this);
+                                if (tapedPoint != null) {
+                                    if ((System.currentTimeMillis() - tapStartTime) >= 2000) {
+                                        getPixelColorFindViewAndMakeListener(tapedPoint, view, ClickType.LONG_PRESS);
+                                        tapStartTime = 0l;
+                                    }
+                                } else {
+                                    throw new NullPointerException("Taped point is null");
+                                }
+                            }
+                        });
                     }
                 };
 
                 if (motionEvent.getAction() == MotionEvent.ACTION_UP) {
                     isLongTouchAlive = false;
                     handler.removeCallbacks(r);
-                    getPixelColor(motionEvent, view, view.getTag().toString(), false);
+                    tapedPoint = new TapedPoint((int) motionEvent.getX(), (int) motionEvent.getY());
+                    getPixelColorFindViewAndMakeListener(tapedPoint, view, ClickType.UP);
                 } else if (motionEvent.getAction() == MotionEvent.ACTION_DOWN) {
-                    isLongTouchAlive = true;
-                    onDetectListener.onClickDown(view);
+                    handler.removeCallbacks(r);
                     handler.postDelayed(r, 2000);
+                    tapStartTime = System.currentTimeMillis();
+
+                    isLongTouchAlive = true;
+                    tapedPoint = new TapedPoint((int) motionEvent.getX(), (int) motionEvent.getY());
+                    getPixelColorFindViewAndMakeListener(tapedPoint, view, ClickType.DOWN);
 
                 }
 
@@ -174,57 +201,14 @@ public class TransparentDetector {
         });
     }
 
-    final GestureDetector gestureDetector = new GestureDetector(new GestureDetector.SimpleOnGestureListener() {
-        public void onLongPress(MotionEvent e) {
-            Log.e("", "Longpress detected");
-        }
-    });
-
-    final Handler handler = new Handler(Looper.getMainLooper());
-
-
-    final Handler responseHandler = new Handler(Looper.getMainLooper()) {
-        @Override
-        public void handleMessage(Message msg) {
-
-            if (msg.what == 1) {
-
-                LongPressData longPressData = (LongPressData) msg.obj;
-
-                Log.d(TAG, "handleMessage: " + longPressData.view);
-                Log.d(TAG, "handleMessage: " + longPressData.motionEvent);
-
-                getPixelColor(longPressData.motionEvent, longPressData.view, longPressData.view.getTag().toString(), true);
-
-            }
-        }
-    };
-
-    class LongPressData {
-        public MotionEvent motionEvent;
-        public View view;
-        public String tag;
-        public boolean isLongPress;
-    }
-
-
-    private View getView(String tag) {
-        return viewHashMap.get(tag);
-    }
-
     public void handShakeListener(OnDetectListener onDetectListener) {
         this.onDetectListener = onDetectListener;
     }
 
     OnDetectListener onDetectListener;
-
     interface OnDetectListener {
         void onClickUp(View view);
-
         void onClickDown(View view);
-
         void onLongClick(View view);
     }
-
-
 }

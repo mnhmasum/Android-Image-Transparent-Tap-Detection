@@ -1,5 +1,6 @@
 package com.artifactsoftwarelab.transparenttap.activities;
 
+import android.graphics.Color;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -23,19 +24,27 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        textView = new TextView(this);
+        textView = findViewById(R.id.textView);
         button = (Button) findViewById(R.id.button);
 
         relativeLayout = findViewById(R.id.relative);
         relativeLayout.setDrawingCacheEnabled(true);
         relativeLayout.buildDrawingCache(true);
 
+        ImageView iv = new ImageView(this);
+        iv.setBackgroundColor(Color.rgb(0, 0, 0));
+
+        RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(30, 40);
+        params.leftMargin = 446;
+        params.topMargin = 352;
+        relativeLayout.addView(iv, params);
+
         imageViewRobot = findViewById(R.id.imageViewRobot);
 
         imageViewRobot.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Log.d(TAG, "onClickUp: robot");
+                Log.d(TAG, "onClick: robot");
             }
         });
 
@@ -45,39 +54,43 @@ public class MainActivity extends AppCompatActivity {
         imageViewCar.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Log.d(TAG, "onClickUp: car");
+                Log.d(TAG, "onClick: car");
             }
         });
 
         imageViewBuddy = (ImageView) findViewById(R.id.imageViewBuddy);
-
         imageViewBuddy.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Log.d(TAG, "onClickUp: buddy");
+                Log.d(TAG, "onClick: buddy");
             }
         });
 
-        TransparentDetector mainActivityPresenter = new TransparentDetector();
-        mainActivityPresenter.addView(imageViewCar);
-        mainActivityPresenter.addView(imageViewBuddy);
-        mainActivityPresenter.addView(imageViewRobot);
-        mainActivityPresenter.build();
+        TransparentDetector transparentDetector = new TransparentDetector();
+        transparentDetector.addView(imageViewCar);
+        transparentDetector.addView(imageViewBuddy);
+        transparentDetector.addView(imageViewRobot);
+        transparentDetector.build();
 
-        mainActivityPresenter.handShakeListener(new TransparentDetector.OnDetectListener() {
+        transparentDetector.handShakeListener(new TransparentDetector.OnDetectListener() {
             @Override
             public void onClickUp(View view) {
                 view.performClick();
+                textView.setText("onClickUp: True " + view.getTag().toString() );
+                Log.d(TAG, "onClickUp: True " + view.getTag().toString());
             }
 
             @Override
             public void onLongClick(View view) {
-                Log.d(TAG, "onLongClick: True");
+                textView.setText("onLongClick: True " + view.getTag().toString() );
+                Log.d(TAG, "onLongClick: True " + view.getTag().toString());
+
             }
 
             @Override
             public void onClickDown(View view) {
-                Log.d(TAG, "onClickDown: True");
+                textView.setText("onClickDown: True " + view.getTag().toString() );
+                Log.d(TAG, "onClickDown: True " + view.getTag().toString());
             }
         });
 
