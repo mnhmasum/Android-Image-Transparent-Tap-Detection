@@ -2,6 +2,7 @@ package com.artifactsoftwarelab.transparenttap.activities;
 
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -10,21 +11,29 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewTreeObserver;
 
-import com.artifactsoftwarelab.transparenttap.Utility.MenuButtonBound;
-import com.artifactsoftwarelab.transparenttap.Utility.TapedPoint;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import com.artifactsoftwarelab.transparenttap.Utility.MenuButtonBound;
+import com.artifactsoftwarelab.transparenttap.Utility.TapedPoint;
+
 
 public class TransparentDetector {
     private static String TAG = "TransparentDetector";
-    private Bitmap bitmap;
-    private List<View> views = new ArrayList<>();
 
+    final Handler handler = new Handler(Looper.getMainLooper());
+
+    private Bitmap bitmap;
+    private TapedPoint tapedPoint;
+
+    private long tapStartTime = 0L;
+    private boolean isLongTouchAlive = false;
+
+    private List<View> views = new ArrayList<>();
     private HashMap<String, View> viewHashMap = new HashMap<>();
     private HashMap<String, MenuButtonBound> menuButtonBoundHashMap = new HashMap<>();
+    private long longPressDuration = 1000;
 
     public enum ClickType {
         DOWN,
@@ -142,17 +151,45 @@ public class TransparentDetector {
         return viewHashMap.get(tag);
     }
 
-    private boolean isLongTouchAlive = false;
-    private TapedPoint tapedPoint;
-    private long tapStartTime = 0L;
-    final Handler handler = new Handler(Looper.getMainLooper());
-
+    private Rect rect;
     public void setOnTouchListener(View view) {
         view.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(final View view, final MotionEvent motionEvent) {
 
-                Runnable r = new Runnable() {
+                Runnable r = getRunnable(view);
+
+                if (motionEvent.getAction() == MotionEvent.ACTION_UP) {
+                    handler.removeCallbacks(r);
+                    isLongTouchAlive = false;
+                    if (tapStartTime == 0l) {
+                        onDetectListener.onLongClickUp(view);
+                    } else {
+                        tapedPoint = new TapedPoint((int) motionEvent.getX(), (int) motionEvent.getY());
+                        getPixelColorFindViewAndMakeListener(tapedPoint, view, ClickType.UP);
+                    }
+                } else if (motionEvent.getAction() == MotionEvent.ACTION_DOWN) {
+                    view.setPressed(true);
+                    Log.d(TAG, "onTouch: " + view.getTag().toString());
+                    handler.removeCallbacks(r);
+                    handler.postDelayed(r, longPressDuration);
+                    tapStartTime = System.currentTimeMillis();
+
+                    isLongTouchAlive = true;
+                    tapedPoint = new TapedPoint((int) motionEvent.getX(), (int) motionEvent.getY());
+                    getPixelColorFindViewAndMakeListener(tapedPoint, view, ClickType.DOWN);
+
+                    rect = new Rect(view.getLeft(), view.getTop(), view.getRight(), view.getBottom());
+
+                } else if ((motionEvent.getAction() & MotionEvent.ACTION_MASK) == MotionEvent.ACTION_MOVE) {
+                    detectOutSide(view, motionEvent);
+                }
+
+                return true;
+            }
+
+            private Runnable getRunnable(final View view) {
+                return new Runnable() {
                     @Override
                     public void run() {
                         if (isLongTouchAlive) {
@@ -168,7 +205,7 @@ public class TransparentDetector {
                             public void run() {
                                 inner.removeCallbacks(this);
                                 if (tapedPoint != null) {
-                                    if ((System.currentTimeMillis() - tapStartTime) >= 2000) {
+                                    if ((System.currentTimeMillis() - tapStartTime) >= longPressDuration) {
                                         getPixelColorFindViewAndMakeListener(tapedPoint, view, ClickType.LONG_PRESS);
                                         tapStartTime = 0l;
                                     }
@@ -179,26 +216,34 @@ public class TransparentDetector {
                         });
                     }
                 };
-
-                if (motionEvent.getAction() == MotionEvent.ACTION_UP) {
-                    isLongTouchAlive = false;
-                    handler.removeCallbacks(r);
-                    tapedPoint = new TapedPoint((int) motionEvent.getX(), (int) motionEvent.getY());
-                    getPixelColorFindViewAndMakeListener(tapedPoint, view, ClickType.UP);
-                } else if (motionEvent.getAction() == MotionEvent.ACTION_DOWN) {
-                    handler.removeCallbacks(r);
-                    handler.postDelayed(r, 2000);
-                    tapStartTime = System.currentTimeMillis();
-
-                    isLongTouchAlive = true;
-                    tapedPoint = new TapedPoint((int) motionEvent.getX(), (int) motionEvent.getY());
-                    getPixelColorFindViewAndMakeListener(tapedPoint, view, ClickType.DOWN);
-
-                }
-
-                return true;
             }
         });
+
+    }
+
+    private void detectOutSide(View view, MotionEvent motionEvent) {
+        tapedPoint = new TapedPoint((int) motionEvent.getX(), (int) motionEvent.getY());
+        try {
+            bitmap = view.getDrawingCache();
+            int pixel = bitmap.getPixel(tapedPoint.getX1(), tapedPoint.getY1());
+            int red = Color.red(pixel);
+            int blue = Color.blue(pixel);
+            int green = Color.green(pixel);
+            Log.d(TAG, "Red====>: " + red + " Blue: " + blue + " Green: " + green);
+
+            if (red == 0 && blue == 0 && green == 0) {
+                cancelTouch(view);
+            } else if (!rect.contains(view.getLeft() + (int) motionEvent.getX(), view.getTop() + (int) motionEvent.getY())) {
+                cancelTouch(view);
+            }
+        } catch (Exception e) {
+            cancelTouch(view);
+        }
+    }
+
+    private void cancelTouch(View view) {
+        view.setPressed(false);
+        onDetectListener.onClickCancel(view);
     }
 
     public void handShakeListener(OnDetectListener onDetectListener) {
@@ -206,9 +251,14 @@ public class TransparentDetector {
     }
 
     OnDetectListener onDetectListener;
-    interface OnDetectListener {
+
+    public interface OnDetectListener {
         void onClickUp(View view);
         void onClickDown(View view);
         void onLongClick(View view);
+        void onLongClickUp(View view);
+        void onClickCancel(View view);
+
     }
+
 }

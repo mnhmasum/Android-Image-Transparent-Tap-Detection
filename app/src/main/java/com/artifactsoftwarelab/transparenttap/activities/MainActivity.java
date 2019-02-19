@@ -70,6 +70,7 @@ public class MainActivity extends AppCompatActivity {
         transparentDetector.addView(imageViewCar);
         transparentDetector.addView(imageViewBuddy);
         transparentDetector.addView(imageViewRobot);
+        transparentDetector.addView(relativeLayout);
         transparentDetector.build();
 
         transparentDetector.handShakeListener(new TransparentDetector.OnDetectListener() {
@@ -84,6 +85,16 @@ public class MainActivity extends AppCompatActivity {
             public void onLongClick(View view) {
                 textView.setText("onLongClick: True " + view.getTag().toString() );
                 Log.d(TAG, "onLongClick: True " + view.getTag().toString());
+
+            }
+
+            @Override
+            public void onLongClickUp(View view) {
+                Log.d(TAG, "onLongClickUp: True " + view.getTag().toString());
+            }
+
+            @Override
+            public void onClickCancel(View view) {
 
             }
 
