@@ -29,6 +29,7 @@ public class TransparentDetector {
 
     private long tapStartTime = 0L;
     private boolean isLongTouchAlive = false;
+    private boolean detectMultipleView = false;
 
     private List<View> views = new ArrayList<>();
     private HashMap<String, View> viewHashMap = new HashMap<>();
@@ -39,6 +40,10 @@ public class TransparentDetector {
         DOWN,
         UP,
         LONG_PRESS
+    }
+
+    public void detectTwoLayerTransparency(boolean detectMultipleView) {
+        this.detectMultipleView = detectMultipleView;
     }
 
     public void addView(View view) {
@@ -112,23 +117,29 @@ public class TransparentDetector {
 
             for (String key : menuButtonBoundHashMap.keySet()) {
                 if (menuButtonBoundHashMap.get(key).isInButtonArea(tapedPointActual) && !key.equalsIgnoreCase(view.getTag().toString())) {
-                    int x = ((tapedPointActual.getX1() - (int) getView(key).getX()) + 1);
-                    int y = ((tapedPointActual.getY1() - (int) getView(key).getY()) + 1);
 
-                    bitmap = getView(key).getDrawingCache();
-                    int pixel = bitmap.getPixel(x, y);
-                    int red1 = Color.red(pixel);
-                    int blue1 = Color.blue(pixel);
-                    int green1 = Color.green(pixel);
-
-                    Log.d(TAG, "down image: " + x + "," + y);
-                    Log.d(TAG, ">>Red: " + red1 + " Blue: " + blue1 + " Green: " + green1);
-
-                    if (red1 != 0 || blue1 != 0 || green1 != 0) {
+                    if (!detectMultipleView) {
                         chooseListener(getView(key), clickType);
-                    }
+                        break;
+                    } else {
+                        int x = ((tapedPointActual.getX1() - (int) getView(key).getX()) + 1);
+                        int y = ((tapedPointActual.getY1() - (int) getView(key).getY()) + 1);
 
-                    break;
+                        bitmap = getView(key).getDrawingCache();
+                        int pixel = bitmap.getPixel(x, y);
+                        int red1 = Color.red(pixel);
+                        int blue1 = Color.blue(pixel);
+                        int green1 = Color.green(pixel);
+
+                        Log.d(TAG, "down image: " + x + "," + y);
+                        Log.d(TAG, ">>Red: " + red1 + " Blue: " + blue1 + " Green: " + green1);
+
+                        if (red1 != 0 || blue1 != 0 || green1 != 0) {
+                            chooseListener(getView(key), clickType);
+                        }
+
+                        break;
+                    }
                 }
             }
 

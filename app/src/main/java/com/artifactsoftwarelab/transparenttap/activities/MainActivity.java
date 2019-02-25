@@ -71,6 +71,7 @@ public class MainActivity extends AppCompatActivity {
         transparentDetector.addView(imageViewBuddy);
         transparentDetector.addView(imageViewRobot);
         transparentDetector.addView(relativeLayout);
+        transparentDetector.detectTwoLayerTransparency(true);
         transparentDetector.build();
 
         transparentDetector.handShakeListener(new TransparentDetector.OnDetectListener() {
