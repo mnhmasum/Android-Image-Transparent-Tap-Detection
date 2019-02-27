@@ -266,9 +266,9 @@ public class TransparentDetector {
     public interface OnDetectListener {
         void onClickUp(View view);
         void onClickDown(View view);
+        void onClickCancel(View view);
         void onLongClick(View view);
         void onLongClickUp(View view);
-        void onClickCancel(View view);
 
     }
 
